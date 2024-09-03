@@ -93,13 +93,7 @@ categoryController.get = async function (req, res, next) {
 	});
 
 	// If no category data found, return 404
-	if (!categoryData) {
-		return res.status(404).render('404', { url: req.url });
-	}
 
-	if (topicIndex > Math.max(categoryData.topic_count - 1, 0)) {
-		return helpers.redirect(res, `/category/${categoryData.slug}/${categoryData.topic_count}?${qs.stringify(req.query)}`);
-	}
 	const pageCount = Math.max(1, Math.ceil(categoryData.topic_count / userSettings.topicsPerPage));
 	if (userSettings.usePagination && currentPage > pageCount) {
 		return next();
