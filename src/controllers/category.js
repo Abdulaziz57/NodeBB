@@ -1,6 +1,5 @@
 'use strict';
 
-
 const nconf = require('nconf');
 const validator = require('validator');
 const qs = require('querystring');
@@ -41,8 +40,12 @@ categoryController.get = async function (req, res, next) {
 		user.auth.getFeedToken(req.uid),
 	]);
 
+	// If the category doesn't exist, return 404
+	if (!categoryFields || categoryFields.disabled) {
+		return res.status(404).render('404', { url: req.url });
+	}
+
 	if (!categoryFields.slug ||
-		(categoryFields && categoryFields.disabled) ||
 		(userSettings.usePagination && currentPage < 1)) {
 		return next();
 	}
@@ -88,8 +91,10 @@ categoryController.get = async function (req, res, next) {
 		tag: req.query.tag,
 		targetUid: targetUid,
 	});
+
+	// If no category data found, return 404
 	if (!categoryData) {
-		return next();
+		return res.status(404).render('404', { url: req.url });
 	}
 
 	if (topicIndex > Math.max(categoryData.topic_count - 1, 0)) {
