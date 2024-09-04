@@ -1,3 +1,6 @@
+// Github copilot was used for fixing some of the errors 
+// with the code when I originally refactored the code.
+
 'use strict';
 
 const nconf = require('nconf');
