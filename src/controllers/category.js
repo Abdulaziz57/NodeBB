@@ -23,7 +23,9 @@ const validSorts = [
 	'recently_replied', 'recently_created', 'most_posts', 'most_votes', 'most_views',
 ];
 
+
 categoryController.get = async function (req, res, next) {
+	console.log('Abdulaziz');
 	const cid = req.params.category_id;
 
 	let currentPage = parseInt(req.query.page, 10) || 1;
@@ -40,32 +42,38 @@ categoryController.get = async function (req, res, next) {
 		user.auth.getFeedToken(req.uid),
 	]);
 
-	// If the category doesn't exist, return 404
+	// If the category doesn't exist or is disabled, return 404
 	if (!categoryFields || categoryFields.disabled) {
 		return res.status(404).render('404', { url: req.url });
 	}
 
-	if (!categoryFields.slug ||
-		(userSettings.usePagination && currentPage < 1)) {
+	// Additional validation for missing slugs or invalid pagination
+	if (!categoryFields.slug || (userSettings.usePagination && currentPage < 1)) {
 		return next();
 	}
+
+	// Redirect if the topicIndex is invalid
 	if (topicIndex < 0) {
 		return helpers.redirect(res, `/category/${categoryFields.slug}?${qs.stringify(req.query)}`);
 	}
 
+	// If user lacks privileges, deny access
 	if (!userPrivileges.read) {
 		return helpers.notAllowed(req, res);
 	}
 
+	// Handle slug mismatch and redirect
 	if (!res.locals.isAPI && !req.params.slug && (categoryFields.slug && categoryFields.slug !== `${cid}/`)) {
 		return helpers.redirect(res, `/category/${categoryFields.slug}?${qs.stringify(req.query)}`, true);
 	}
 
+	// If category is a link, increase click count and redirect
 	if (categoryFields.link) {
 		await db.incrObjectField(`category:${cid}`, 'timesClicked');
 		return helpers.redirect(res, validator.unescape(categoryFields.link));
 	}
 
+	// Handle pagination
 	if (!userSettings.usePagination) {
 		topicIndex = Math.max(0, topicIndex - (Math.ceil(userSettings.topicsPerPage / 2) - 1));
 	} else if (!req.query.page) {
@@ -74,6 +82,7 @@ categoryController.get = async function (req, res, next) {
 		topicIndex = 0;
 	}
 
+	// Fetch category data
 	const targetUid = await user.getUidByUserslug(req.query.author);
 	const start = ((currentPage - 1) * userSettings.topicsPerPage) + topicIndex;
 	const stop = start + userSettings.topicsPerPage - 1;
@@ -93,15 +102,21 @@ categoryController.get = async function (req, res, next) {
 	});
 
 	// If no category data found, return 404
+	if (!categoryData) {
+		return res.status(404).render('404', { url: req.url });
+	}
 
+	// Ensure topic index is within bounds
 	const pageCount = Math.max(1, Math.ceil(categoryData.topic_count / userSettings.topicsPerPage));
 	if (userSettings.usePagination && currentPage > pageCount) {
 		return next();
 	}
 
+	// Apply privileges and filter tags
 	categories.modifyTopicsByPrivilege(categoryData.topics, userPrivileges);
 	categoryData.tagWhitelist = categories.filterTagWhitelist(categoryData.tagWhitelist, userPrivileges.isAdminOrMod);
 
+	// Process subcategories
 	const allCategories = [];
 	categories.flattenCategories(allCategories, categoryData.children);
 
@@ -124,6 +139,7 @@ categoryController.get = async function (req, res, next) {
 		});
 	}
 
+	// Prepare category data for rendering
 	categoryData.title = translator.escape(categoryData.name);
 	categoryData.selectCategoryLabel = '[[category:subcategories]]';
 	categoryData.description = translator.escape(categoryData.description);
@@ -135,6 +151,7 @@ categoryController.get = async function (req, res, next) {
 	categoryData.selectedTags = tagData.selectedTags;
 	categoryData.sortOptionLabel = `[[topic:${validator.escape(String(sort)).replace(/_/g, '-')}]]`;
 
+	// Handle RSS feed
 	if (!meta.config['feeds:disableRSS']) {
 		categoryData.rssFeedUrl = `${url}/category/${categoryData.cid}.rss`;
 		if (req.loggedIn) {
@@ -142,6 +159,7 @@ categoryController.get = async function (req, res, next) {
 		}
 	}
 
+	// Add tags for SEO purposes
 	addTags(categoryData, res, currentPage);
 
 	categoryData['feeds:disableRSS'] = meta.config['feeds:disableRSS'] || 0;
@@ -154,6 +172,7 @@ categoryController.get = async function (req, res, next) {
 
 	analytics.increment([`pageviews:byCid:${categoryData.cid}`]);
 
+	// Render the category page
 	res.render('category', categoryData);
 };
 
